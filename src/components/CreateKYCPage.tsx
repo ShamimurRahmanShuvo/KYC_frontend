@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { getAuthHeaders } from '../services/auth'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -20,6 +20,7 @@ export function CreateKYCPage() {
   const [documentType, setDocumentType] = useState('')
   const [kycApplication, setKycApplication] = useState<KYCApplication | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -43,6 +44,27 @@ export function CreateKYCPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
+
+  useEffect(() => {
+    async function fetchExistingApplication() {
+      try {
+        const response = await fetch(`${API_BASE}/kyc/my-applications`, {
+          headers: getAuthHeaders(),
+        })
+        if (response.ok) {
+          const applications: KYCApplication[] = await response.json()
+          if (applications.length > 0) {
+            setKycApplication(applications[0]) // Assuming only one
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch existing applications:', err)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchExistingApplication()
+  }, [])
 
   async function createKYCApplication() {
     setIsCreating(true)
@@ -279,9 +301,18 @@ export function CreateKYCPage() {
   return (
     <div className="card shadow-sm border-0 rounded-4">
       <div className="card-body p-4 p-md-5">
-        <h1 className="card-title h2 mb-4">Create KYC Application</h1>
+        <h1 className="card-title h2 mb-4">
+          {kycApplication ? 'Update KYC Application' : 'Create KYC Application'}
+        </h1>
 
-        {!kycApplication ? (
+        {isLoading ? (
+          <div className="text-center py-5">
+            <div className="spinner-border text-primary" role="status">
+              <span className="visually-hidden">Loading...</span>
+            </div>
+            <p className="mt-3 text-muted">Checking for existing applications...</p>
+          </div>
+        ) : !kycApplication ? (
           <>
             <p className="text-muted mb-4">
               Start your KYC verification process by providing basic information.
@@ -349,12 +380,12 @@ export function CreateKYCPage() {
         ) : (
           <>
             <div className="alert alert-info mb-4">
-              <strong>Application Created:</strong> {kycApplication.case_reference}
+              <strong>Application:</strong> {kycApplication.case_reference}
               <br />
               <strong>Status:</strong> {kycApplication.status}
             </div>
 
-            <h3 className="h4 mb-4">Upload Documents</h3>
+            <h3 className="h4 mb-4">Update Documents</h3>
 
             <div className="row g-4 mb-4">
               <div className="col-md-6">
