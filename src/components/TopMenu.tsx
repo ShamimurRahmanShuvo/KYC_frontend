@@ -39,15 +39,26 @@ export function TopMenu({ activePage, setActivePage, isLoggedIn, onLogout }: Top
             </li>
           )}
           {isLoggedIn ? (
-            <li className="nav-item">
-              <button
-                type="button"
-                className="nav-link btn btn-link"
-                onClick={onLogout}
-              >
-                Logout
-              </button>
-            </li>
+            <>
+              <li className="nav-item">
+                <button
+                  type="button"
+                  className="nav-link btn btn-link"
+                  onClick={onLogout}
+                >
+                  Logout
+                </button>
+              </li>
+              <li className="nav-item">
+                <button
+                  type="button"
+                  className={`nav-link btn btn-link${activePage === 'create-kyc' ? ' active fw-bold' : ''}`}
+                  onClick={() => setActivePage('create-kyc')}
+                >
+                  Create KYC
+                </button>
+              </li>
+            </>
           ) : (
             <li className="nav-item">
               <button
@@ -59,15 +70,6 @@ export function TopMenu({ activePage, setActivePage, isLoggedIn, onLogout }: Top
               </button>
             </li>
           )}
-          <li className="nav-item">
-            <button
-              type="button"
-              className={`nav-link btn btn-link${activePage === 'create-kyc' ? ' active fw-bold' : ''}`}
-              onClick={() => setActivePage('create-kyc')}
-            >
-              Create KYC
-            </button>
-          </li>
         </ul>
       </div>
     </nav>

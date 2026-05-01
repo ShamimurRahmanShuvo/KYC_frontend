@@ -26,8 +26,6 @@ export function CreateKYCPage() {
   // File refs
   const frontIdRef = useRef<HTMLInputElement>(null)
   const backIdRef = useRef<HTMLInputElement>(null)
-  const selfieRef = useRef<HTMLInputElement>(null)
-  const videoRef = useRef<HTMLInputElement>(null)
 
   // Upload states
   const [frontIdUploaded, setFrontIdUploaded] = useState(false)
@@ -35,6 +33,16 @@ export function CreateKYCPage() {
   const [selfieUploaded, setSelfieUploaded] = useState(false)
   const [videoUploaded, setVideoUploaded] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [cameraMode, setCameraMode] = useState<'selfie' | 'video' | null>(null)
+  const [cameraReady, setCameraReady] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordedVideo, setRecordedVideo] = useState<Blob | null>(null)
+
+  const videoElementRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordedChunksRef = useRef<Blob[]>([])
+  const streamRef = useRef<MediaStream | null>(null)
 
   async function createKYCApplication() {
     setIsCreating(true)
@@ -68,11 +76,12 @@ export function CreateKYCPage() {
     }
   }
 
-  async function uploadFile(file: File, endpoint: string, setUploaded: (value: boolean) => void) {
+  async function uploadFile(file: File | Blob, endpoint: string, setUploaded: (value: boolean) => void) {
     if (!kycApplication) return
 
     const formData = new FormData()
-    formData.append('file', file)
+    const uploadFile = file instanceof File ? file : new File([file], endpoint.includes('video') ? 'recording.webm' : 'capture.jpg', { type: file.type || 'application/octet-stream' })
+    formData.append('file', uploadFile)
 
     try {
       const response = await fetch(`${API_BASE}/kyc/${kycApplication.id}/${endpoint}`, {
@@ -104,6 +113,136 @@ export function CreateKYCPage() {
 
     try {
       await uploadFile(file, endpoint, setUploaded)
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  async function startCamera(mode: 'selfie' | 'video') {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('Camera access is not supported in this browser.')
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: mode === 'video' })
+      streamRef.current = stream
+      setCameraMode(mode)
+      setCameraReady(false)
+      setError(null)
+      setSuccess(null)
+
+      if (videoElementRef.current) {
+        const videoEl = videoElementRef.current
+        videoEl.srcObject = stream
+        videoEl.onloadedmetadata = () => {
+          videoEl.play().catch(() => {})
+          setCameraReady(true)
+        }
+        if (videoEl.readyState >= 1) {
+          videoEl.play().catch(() => {})
+          setCameraReady(true)
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not access camera.')
+    }
+  }
+
+  function stopCamera() {
+    if (videoElementRef.current) {
+      videoElementRef.current.pause()
+      videoElementRef.current.srcObject = null
+      videoElementRef.current.onloadedmetadata = null
+    }
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+    setCameraMode(null)
+    setCameraReady(false)
+    setIsRecording(false)
+  }
+
+  async function captureSelfie() {
+    if (!videoElementRef.current) {
+      setError('Camera preview is not available.')
+      return
+    }
+
+    const video = videoElementRef.current
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      setError('Camera preview is still loading. Please wait a moment.')
+      return
+    }
+
+    const canvas = canvasRef.current || document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      setError('Failed to initialize capture.')
+      return
+    }
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95))
+
+    if (!blob) {
+      setError('Failed to capture selfie.')
+      return
+    }
+
+    setIsUploading(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const file = new File([blob], `selfie-${Date.now()}.jpg`, { type: 'image/jpeg' })
+      await uploadFile(file, 'upload-selfie', setSelfieUploaded)
+      stopCamera()
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  function startVideoRecording() {
+    if (!streamRef.current) return
+
+    const recorder = new MediaRecorder(streamRef.current)
+    mediaRecorderRef.current = recorder
+    recordedChunksRef.current = []
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) recordedChunksRef.current.push(event.data)
+    }
+
+    recorder.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
+      setRecordedVideo(blob)
+    }
+
+    recorder.start()
+    setIsRecording(true)
+    setRecordedVideo(null)
+  }
+
+  async function stopVideoRecording() {
+    if (!mediaRecorderRef.current) return
+    mediaRecorderRef.current.stop()
+    setIsRecording(false)
+    stopCamera()
+  }
+
+  async function uploadRecordedVideo() {
+    if (!recordedVideo) return
+
+    setIsUploading(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const file = new File([recordedVideo], `video-${Date.now()}.webm`, { type: 'video/webm' })
+      await uploadFile(file, 'upload-video', setVideoUploaded)
+      stopCamera()
     } finally {
       setIsUploading(false)
     }
@@ -273,22 +412,54 @@ export function CreateKYCPage() {
                   <div className="card-body">
                     <h5 className="card-title">Selfie</h5>
                     <p className="card-text text-muted small">
-                      Take a clear selfie showing your face clearly.
+                      Take a clear selfie using your camera.
                     </p>
-                    <input
-                      ref={selfieRef}
-                      type="file"
-                      accept="image/*"
-                      className="form-control mb-2"
-                      disabled={selfieUploaded}
-                    />
-                    <button
-                      onClick={() => handleFileUpload(selfieRef, 'upload-selfie', setSelfieUploaded)}
-                      disabled={isUploading || selfieUploaded}
-                      className="btn btn-outline-primary btn-sm"
-                    >
-                      {selfieUploaded ? '✓ Uploaded' : 'Upload Selfie'}
-                    </button>
+                    {selfieUploaded ? (
+                      <div className="alert alert-success py-2">
+                        Selfie uploaded successfully.
+                      </div>
+                    ) : cameraMode === 'selfie' ? (
+                      <>
+                        <video
+                          ref={videoElementRef}
+                          className="w-100 rounded mb-3"
+                          autoPlay
+                          muted
+                          playsInline
+                          style={{ height: '320px', objectFit: 'cover' }}
+                        />
+                        {!cameraReady && (
+                          <div className="text-muted small mb-2">
+                            Starting camera preview... please allow access and wait a moment.
+                          </div>
+                        )}
+                        <div className="d-flex gap-2">
+                          <button
+                            onClick={captureSelfie}
+                            disabled={isUploading || !cameraReady}
+                            className="btn btn-primary btn-sm"
+                          >
+                            Capture Selfie
+                          </button>
+                          <button
+                            onClick={stopCamera}
+                            disabled={isUploading}
+                            className="btn btn-outline-secondary btn-sm"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        <canvas ref={canvasRef} style={{ display: 'none' }} />
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => startCamera('selfie')}
+                        disabled={isUploading || selfieUploaded}
+                        className="btn btn-outline-primary btn-sm"
+                      >
+                        Use Camera for Selfie
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -300,20 +471,68 @@ export function CreateKYCPage() {
                     <p className="card-text text-muted small">
                       Record a short video for enhanced liveness detection.
                     </p>
-                    <input
-                      ref={videoRef}
-                      type="file"
-                      accept="video/*"
-                      className="form-control mb-2"
-                      disabled={videoUploaded}
-                    />
-                    <button
-                      onClick={() => handleFileUpload(videoRef, 'upload-video', setVideoUploaded)}
-                      disabled={isUploading || videoUploaded}
-                      className="btn btn-outline-primary btn-sm"
-                    >
-                      {videoUploaded ? '✓ Uploaded' : 'Upload Video'}
-                    </button>
+                    {videoUploaded ? (
+                      <div className="alert alert-success py-2">
+                        Video uploaded successfully.
+                      </div>
+                    ) : cameraMode === 'video' ? (
+                      <>
+                        <video
+                          ref={videoElementRef}
+                          className="w-100 rounded mb-3"
+                          autoPlay
+                          muted
+                          playsInline
+                          style={{ height: '320px', objectFit: 'cover' }}
+                        />
+                        {!cameraReady && (
+                          <div className="text-muted small mb-2">
+                            Starting camera preview... please allow access and wait.
+                          </div>
+                        )}
+                        <div className="d-flex gap-2 mb-3">
+                          <button
+                            onClick={isRecording ? stopVideoRecording : startVideoRecording}
+                            disabled={!cameraReady}
+                            className={`btn btn-${isRecording ? 'danger' : 'primary'} btn-sm`}
+                          >
+                            {isRecording ? 'Stop Recording' : 'Start Recording'}
+                          </button>
+                          <button
+                            onClick={stopCamera}
+                            disabled={isUploading || isRecording}
+                            className="btn btn-outline-secondary btn-sm"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        {recordedVideo && (
+                          <>
+                            <video
+                              src={URL.createObjectURL(recordedVideo)}
+                              controls
+                              className="w-100 rounded mb-3"
+                              style={{ maxHeight: '240px', objectFit: 'cover' }}
+                            />
+                            <button
+                              onClick={uploadRecordedVideo}
+                              disabled={isUploading}
+                              className="btn btn-outline-primary btn-sm"
+                            >
+                              Upload Recorded Video
+                            </button>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => startCamera('video')}
+                        disabled={isUploading || videoUploaded}
+                        className="btn btn-outline-primary btn-sm"
+                      >
+                        Use Camera for Video
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

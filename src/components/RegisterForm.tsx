@@ -3,7 +3,11 @@ import type { FormEvent } from 'react'
 import type { RegisterRequest } from '../types/auth'
 import { registerUser } from '../services/api'
 
-export function RegisterForm() {
+interface RegisterFormProps {
+  onRegisterSuccess: () => void
+}
+
+export function RegisterForm({ onRegisterSuccess }: RegisterFormProps) {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -29,6 +33,7 @@ export function RegisterForm() {
       setUsername('')
       setEmail('')
       setPassword('')
+      onRegisterSuccess()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to connect to the backend. Please verify the API URL.')
     } finally {

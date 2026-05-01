@@ -22,6 +22,10 @@ function App() {
     setActivePage('create-kyc')
   }
 
+  function handleRegisterSuccess() {
+    setActivePage('login')
+  }
+
   function handleLogout() {
     clearAuthToken()
     setLoggedIn(false)
@@ -30,11 +34,11 @@ function App() {
 
   let pageContent = null
   if (activePage === 'register') {
-    pageContent = <RegisterForm />
+    pageContent = <RegisterForm onRegisterSuccess={handleRegisterSuccess} />
   } else if (activePage === 'login') {
     pageContent = <LoginForm onLoginSuccess={handleLoginSuccess} />
   } else if (activePage === 'create-kyc') {
-    pageContent = <CreateKYCPage />
+    pageContent = loggedIn ? <CreateKYCPage /> : <LoginForm onLoginSuccess={handleLoginSuccess} />
   } else {
     pageContent = <HomePage />
   }
