@@ -5,9 +5,11 @@ type PageKey = 'home' | 'register' | 'login' | 'create-kyc'
 interface TopMenuProps {
   activePage: PageKey
   setActivePage: Dispatch<SetStateAction<PageKey>>
+  isLoggedIn: boolean
+  onLogout: () => void
 }
 
-export function TopMenu({ activePage, setActivePage }: TopMenuProps) {
+export function TopMenu({ activePage, setActivePage, isLoggedIn, onLogout }: TopMenuProps) {
   return (
     <nav className="navbar navbar-expand navbar-white bg-white border-bottom shadow-sm">
       <div className="container-fluid px-4">
@@ -25,24 +27,38 @@ export function TopMenu({ activePage, setActivePage }: TopMenuProps) {
               Home
             </button>
           </li>
-          <li className="nav-item">
-            <button
-              type="button"
-              className={`nav-link btn btn-link${activePage === 'register' ? ' active fw-bold' : ''}`}
-              onClick={() => setActivePage('register')}
-            >
-              Register
-            </button>
-          </li>
-          <li className="nav-item">
-            <button
-              type="button"
-              className={`nav-link btn btn-link${activePage === 'login' ? ' active fw-bold' : ''}`}
-              onClick={() => setActivePage('login')}
-            >
-              Login
-            </button>
-          </li>
+          {!isLoggedIn && (
+            <li className="nav-item">
+              <button
+                type="button"
+                className={`nav-link btn btn-link${activePage === 'register' ? ' active fw-bold' : ''}`}
+                onClick={() => setActivePage('register')}
+              >
+                Register
+              </button>
+            </li>
+          )}
+          {isLoggedIn ? (
+            <li className="nav-item">
+              <button
+                type="button"
+                className="nav-link btn btn-link"
+                onClick={onLogout}
+              >
+                Logout
+              </button>
+            </li>
+          ) : (
+            <li className="nav-item">
+              <button
+                type="button"
+                className={`nav-link btn btn-link${activePage === 'login' ? ' active fw-bold' : ''}`}
+                onClick={() => setActivePage('login')}
+              >
+                Login
+              </button>
+            </li>
+          )}
           <li className="nav-item">
             <button
               type="button"

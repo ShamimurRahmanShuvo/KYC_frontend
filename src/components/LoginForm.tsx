@@ -1,18 +1,20 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import type { LoginRequest } from '../types/auth'
-import { loginUser } from '../services/api'
+import { login } from '../services/auth'
 
-export function LoginForm() {
+interface LoginFormProps {
+  onLoginSuccess: () => void
+}
+
+export function LoginForm({ onLoginSuccess }: LoginFormProps) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setMessage(null)
     setError(null)
     setIsSubmitting(true)
 
@@ -22,11 +24,10 @@ export function LoginForm() {
     }
 
     try {
-      const data = await loginUser(payload)
-      setMessage(`Login successful. Token received.`)
+      await login(payload)
       setUsername('')
       setPassword('')
-      console.log('Login token:', data.access_token)
+      onLoginSuccess()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to connect to the backend. Please verify the API URL.')
     } finally {
@@ -85,7 +86,6 @@ export function LoginForm() {
           </button>
         </form>
 
-        {message && <div className="alert alert-success" role="alert">{message}</div>}
         {error && <div className="alert alert-danger" role="alert">{error}</div>}
       </div>
     </div>

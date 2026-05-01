@@ -25,3 +25,28 @@ export interface ApiError {
   detail?: string
   message?: string
 }
+
+// KYC Types
+export interface CreateKYCRequest {
+  country?: string
+  document_type?: string
+}
+
+export interface KYCCaseResponse {
+  id: number
+  case_reference: string
+  status: string
+  retry_count: number
+  created_at: string
+}
+
+export interface DocumentUploadResponse {
+  document_id: number
+  message: string
+}
+
+export interface KYCEvaluationResponse {
+  decision: string
+  confidence_score?: number
+  message?: string
+}
