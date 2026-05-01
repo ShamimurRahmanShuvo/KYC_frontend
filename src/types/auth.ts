@@ -11,6 +11,16 @@ export interface RegisterResponse {
   roles: string[]
 }
 
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+export interface TokenResponse {
+  access_token: string
+  token_type: string
+}
+
 export interface ApiError {
   detail?: string
   message?: string

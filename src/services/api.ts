@@ -1,9 +1,22 @@
-import type { RegisterRequest, RegisterResponse, ApiError } from '../types/auth'
+import type { ApiError, LoginRequest, RegisterRequest, RegisterResponse, TokenResponse } from '../types/auth'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
+async function fetchJson<T>(url: string, options: RequestInit): Promise<T> {
+  const response = await fetch(url, options)
+  const data = await response.json()
+
+  if (!response.ok) {
+    const error: ApiError = data
+    const detail = error.detail || error.message || 'Request failed'
+    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
+  }
+
+  return data as T
+}
+
 export async function registerUser(payload: RegisterRequest): Promise<RegisterResponse> {
-  const response = await fetch(`${API_BASE}/auth/register`, {
+  return fetchJson<RegisterResponse>(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -11,14 +24,18 @@ export async function registerUser(payload: RegisterRequest): Promise<RegisterRe
     },
     body: JSON.stringify(payload),
   })
+}
 
-  const data = await response.json()
-
-  if (!response.ok) {
-    const error: ApiError = data
-    const detail = error.detail || error.message || 'Registration failed'
-    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
-  }
-
-  return data as RegisterResponse
+export async function loginUser(payload: LoginRequest): Promise<TokenResponse> {
+  return fetchJson<TokenResponse>(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    },
+    body: new URLSearchParams({
+      username: payload.username,
+      password: payload.password,
+    }),
+  })
 }
