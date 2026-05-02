@@ -1,15 +1,17 @@
 import type { Dispatch, SetStateAction } from 'react'
 
-type PageKey = 'home' | 'register' | 'login' | 'create-kyc'
+type PageKey = 'home' | 'register' | 'login' | 'create-kyc' | 'admin-dashboard' | 'admin-kyc-list' | 'admin-kyc-detail'
 
 interface TopMenuProps {
   activePage: PageKey
   setActivePage: Dispatch<SetStateAction<PageKey>>
   isLoggedIn: boolean
+  showAdmin: boolean
   onLogout: () => void
 }
 
-export function TopMenu({ activePage, setActivePage, isLoggedIn, onLogout }: TopMenuProps) {
+export function TopMenu({ activePage, setActivePage, isLoggedIn, showAdmin, onLogout }: TopMenuProps) {
+
   return (
     <nav className="navbar navbar-expand navbar-white bg-white border-bottom shadow-sm">
       <div className="container-fluid px-4">
@@ -38,27 +40,49 @@ export function TopMenu({ activePage, setActivePage, isLoggedIn, onLogout }: Top
               </button>
             </li>
           )}
-          {isLoggedIn ? (
+          {isLoggedIn && !showAdmin && (
+            <li className="nav-item">
+              <button
+                type="button"
+                className={`nav-link btn btn-link${activePage === 'create-kyc' ? ' active fw-bold' : ''}`}
+                onClick={() => setActivePage('create-kyc')}
+              >
+                Create KYC
+              </button>
+            </li>
+          )}
+          {showAdmin && (
             <>
               <li className="nav-item">
                 <button
                   type="button"
-                  className="nav-link btn btn-link"
-                  onClick={onLogout}
+                  className={`nav-link btn btn-link${activePage === 'admin-dashboard' ? ' active fw-bold' : ''}`}
+                  onClick={() => setActivePage('admin-dashboard')}
                 >
-                  Logout
+                  Admin Dashboard
                 </button>
               </li>
               <li className="nav-item">
                 <button
                   type="button"
-                  className={`nav-link btn btn-link${activePage === 'create-kyc' ? ' active fw-bold' : ''}`}
-                  onClick={() => setActivePage('create-kyc')}
+                  className={`nav-link btn btn-link${activePage === 'admin-kyc-list' ? ' active fw-bold' : ''}`}
+                  onClick={() => setActivePage('admin-kyc-list')}
                 >
-                  Create KYC
+                  KYC Applications
                 </button>
               </li>
             </>
+          )}
+          {isLoggedIn ? (
+            <li className="nav-item">
+              <button
+                type="button"
+                className="nav-link btn btn-link"
+                onClick={onLogout}
+              >
+                Logout
+              </button>
+            </li>
           ) : (
             <li className="nav-item">
               <button

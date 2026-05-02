@@ -4,7 +4,7 @@ import type { LoginRequest } from '../types/auth'
 import { login } from '../services/auth'
 
 interface LoginFormProps {
-  onLoginSuccess: () => void
+  onLoginSuccess: () => Promise<void>
 }
 
 export function LoginForm({ onLoginSuccess }: LoginFormProps) {
@@ -27,7 +27,7 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
       await login(payload)
       setUsername('')
       setPassword('')
-      onLoginSuccess()
+      await onLoginSuccess()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to connect to the backend. Please verify the API URL.')
     } finally {
