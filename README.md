@@ -29,4 +29,3 @@ This application integrates with a FastAPI-based KYC microservice that provides:
 - Face matching
 - Liveness detection
 - KYC workflow management
-- Audit and compliance reporting
