@@ -4,14 +4,16 @@ import { HomePage } from './components/HomePage'
 import { RegisterForm } from './components/RegisterForm'
 import { LoginForm } from './components/LoginForm'
 import { CreateKYCPage } from './components/CreateKYCPage'
+import { UploadDocumentsPage } from './components/UploadDocumentsPage'
 import { AdminDashboard } from './components/AdminDashboard'
 import { KYCList } from './components/KYCList'
 import { KYCDetail } from './components/KYCDetail'
+import { AdminUsers } from './components/AdminUsers.tsx'
 import type { CurrentUserResponse } from './types/auth'
 import { clearAuthToken, ensureCurrentUser, isLoggedIn } from './services/auth'
 import './App.css'
 
-type PageKey = 'home' | 'register' | 'login' | 'create-kyc' | 'admin-dashboard' | 'admin-kyc-list' | 'admin-kyc-detail'
+type PageKey = 'home' | 'register' | 'login' | 'create-kyc' | 'upload-documents' | 'admin-dashboard' | 'admin-kyc-list' | 'admin-kyc-detail' | 'admin-users'
 
 function App() {
   const [activePage, setActivePage] = useState<PageKey>('home')
@@ -83,7 +85,20 @@ function App() {
   } else if (activePage === 'login') {
     pageContent = <LoginForm onLoginSuccess={handleLoginSuccess} />
   } else if (activePage === 'create-kyc') {
-    pageContent = loggedIn ? <CreateKYCPage /> : <LoginForm onLoginSuccess={handleLoginSuccess} />
+    pageContent = loggedIn ? (
+      <CreateKYCPage onExistingApplication={(applicationId: number) => {
+        setSelectedKYCId(applicationId)
+        setActivePage('upload-documents')
+      }} />
+    ) : (
+      <LoginForm onLoginSuccess={handleLoginSuccess} />
+    )
+  } else if (activePage === 'upload-documents') {
+    pageContent = loggedIn && selectedKYCId ? (
+      <UploadDocumentsPage kycId={selectedKYCId} onBack={() => setActivePage('create-kyc')} />
+    ) : (
+      <LoginForm onLoginSuccess={handleLoginSuccess} />
+    )
   } else if (activePage === 'admin-dashboard') {
     pageContent = loggedIn && currentUser && currentUser.roles.some((role) => role === 'admin' || role === 'reviewer') ? (
       <AdminDashboard />
@@ -93,6 +108,12 @@ function App() {
   } else if (activePage === 'admin-kyc-list') {
     pageContent = loggedIn && currentUser && currentUser.roles.some((role) => role === 'admin' || role === 'reviewer') ? (
       <KYCList onSelectKYC={handleSelectKYC} />
+    ) : (
+      <LoginForm onLoginSuccess={handleLoginSuccess} />
+    )
+  } else if (activePage === 'admin-users') {
+    pageContent = loggedIn && currentUser && currentUser.roles.some((role) => role === 'admin') ? (
+      <AdminUsers />
     ) : (
       <LoginForm onLoginSuccess={handleLoginSuccess} />
     )
@@ -107,7 +128,7 @@ function App() {
       <LoginForm onLoginSuccess={handleLoginSuccess} />
     )
   } else {
-    pageContent = <HomePage />
+    pageContent = <HomePage loggedIn={loggedIn} />
   }
 
   return (

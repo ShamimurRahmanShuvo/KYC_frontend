@@ -199,11 +199,47 @@ export interface AdminReviewResponse {
   created_at: string
 }
 
+export interface AdminReviewHistoryItem {
+  id: number
+  application_id: number
+  reviewer_id: number
+  action: string
+  notes?: string
+  previous_status?: string
+  new_status: string
+  reviewed_by: string
+  created_at: string
+}
+
+export interface AdminAuditLog {
+  id: number
+  actor_user_id?: number
+  action: string
+  entity_type: string
+  entity_id: string
+  ip_address?: string
+  details?: unknown
+  created_at: string
+}
+
 export interface CurrentUserResponse {
   id: number
   username: string
   email?: string
   roles: string[]
+}
+
+export interface AdminUser {
+  id: number
+  username: string
+  email?: string
+  roles: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface RoleResponse {
+  name: string
 }
 
 export async function getCurrentUser(authHeaders: HeadersInit): Promise<CurrentUserResponse> {
@@ -213,6 +249,50 @@ export async function getCurrentUser(authHeaders: HeadersInit): Promise<CurrentU
       Accept: 'application/json',
       ...authHeaders,
     },
+  })
+}
+
+export async function listAdminUsers(authHeaders: HeadersInit): Promise<AdminUser[]> {
+  return fetchJson<AdminUser[]>(`${API_BASE}/admin/users`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      ...authHeaders,
+    },
+  })
+}
+
+export async function listRoles(authHeaders: HeadersInit): Promise<RoleResponse[]> {
+  return fetchJson<RoleResponse[]>(`${API_BASE}/auth/roles`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      ...authHeaders,
+    },
+  })
+}
+
+export async function createRole(roleName: string, authHeaders: HeadersInit): Promise<RoleResponse> {
+  return fetchJson<RoleResponse>(`${API_BASE}/auth/create-role`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...authHeaders,
+    },
+    body: JSON.stringify({ name: roleName }),
+  })
+}
+
+export async function updateUserRoles(userId: number, roles: string[], authHeaders: HeadersInit): Promise<AdminUser> {
+  return fetchJson<AdminUser>(`${API_BASE}/admin/users/${userId}/roles`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...authHeaders,
+    },
+    body: JSON.stringify({ roles }),
   })
 }
 
@@ -256,6 +336,26 @@ export async function searchKYCapplications(
 
 export async function getKYCDetail(kycId: number, authHeaders: HeadersInit): Promise<AdminKYCDetailResponse> {
   return fetchJson<AdminKYCDetailResponse>(`${API_BASE}/admin/kyc-applications/${kycId}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      ...authHeaders,
+    },
+  })
+}
+
+export async function getKYCReviewHistory(kycId: number, authHeaders: HeadersInit): Promise<AdminReviewHistoryItem[]> {
+  return fetchJson<AdminReviewHistoryItem[]>(`${API_BASE}/admin/kyc-applications/${kycId}/reviews`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      ...authHeaders,
+    },
+  })
+}
+
+export async function getKYCAuditLogs(kycId: number, authHeaders: HeadersInit): Promise<AdminAuditLog[]> {
+  return fetchJson<AdminAuditLog[]>(`${API_BASE}/admin/kyc-applications/${kycId}/audit-logs`, {
     method: 'GET',
     headers: {
       Accept: 'application/json',

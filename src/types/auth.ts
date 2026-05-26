@@ -90,6 +90,19 @@ export interface AdminApplicant {
   updated_at: string
 }
 
+export interface AdminUser {
+  id: number
+  username: string
+  email?: string
+  roles: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface RoleResponse {
+  name: string
+}
+
 export interface AdminKYCDetailResponse {
   id: number
   case_reference: string
@@ -148,5 +161,28 @@ export interface AdminReviewResponse {
   new_status: string
   reviewed_by: string
   notes?: string
+  created_at: string
+}
+
+export interface AdminReviewHistoryItem {
+  id: number
+  application_id: number
+  reviewer_id: number
+  action: string
+  notes?: string
+  previous_status?: string
+  new_status: string
+  reviewed_by: string
+  created_at: string
+}
+
+export interface AdminAuditLog {
+  id: number
+  actor_user_id?: number
+  action: string
+  entity_type: string
+  entity_id: string
+  ip_address?: string
+  details?: unknown
   created_at: string
 }

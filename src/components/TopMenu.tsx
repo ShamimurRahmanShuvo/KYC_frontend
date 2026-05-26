@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 
-type PageKey = 'home' | 'register' | 'login' | 'create-kyc' | 'admin-dashboard' | 'admin-kyc-list' | 'admin-kyc-detail'
+type PageKey = 'home' | 'register' | 'login' | 'create-kyc' | 'upload-documents' | 'admin-dashboard' | 'admin-kyc-list' | 'admin-kyc-detail' | 'admin-users'
 
 interface TopMenuProps {
   activePage: PageKey
@@ -69,6 +69,15 @@ export function TopMenu({ activePage, setActivePage, isLoggedIn, showAdmin, onLo
                   onClick={() => setActivePage('admin-kyc-list')}
                 >
                   KYC Applications
+                </button>
+              </li>
+              <li className="nav-item">
+                <button
+                  type="button"
+                  className={`nav-link btn btn-link${activePage === 'admin-users' ? ' active fw-bold' : ''}`}
+                  onClick={() => setActivePage('admin-users')}
+                >
+                  User Roles
                 </button>
               </li>
             </>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { getKYCDetail, approveKYC, rejectKYC } from '../services/api'
+import { getKYCDetail, approveKYC, rejectKYC, getKYCReviewHistory, getKYCAuditLogs } from '../services/api'
 import { getAuthHeaders } from '../services/auth'
-import type { AdminDocument, AdminKYCDetailResponse, AdminReviewRequest } from '../types/auth'
+import type { AdminDocument, AdminKYCDetailResponse, AdminReviewHistoryItem, AdminAuditLog, AdminReviewRequest } from '../types/auth'
 
 interface KYCDetailProps {
   kycId: number
@@ -16,6 +16,8 @@ export function KYCDetail({ kycId, onBack, onReviewComplete }: KYCDetailProps) {
   const [reviewNotes, setReviewNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [previewDocument, setPreviewDocument] = useState<AdminDocument | null>(null)
+  const [reviewHistory, setReviewHistory] = useState<AdminReviewHistoryItem[]>([])
+  const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([])
 
   useEffect(() => {
     loadKYCDetail()
@@ -40,8 +42,14 @@ export function KYCDetail({ kycId, onBack, onReviewComplete }: KYCDetailProps) {
   async function loadKYCDetail() {
     try {
       setLoading(true)
-      const data = await getKYCDetail(kycId, getAuthHeaders())
+      const [data, reviews, audits] = await Promise.all([
+        getKYCDetail(kycId, getAuthHeaders()),
+        getKYCReviewHistory(kycId, getAuthHeaders()),
+        getKYCAuditLogs(kycId, getAuthHeaders()),
+      ])
       setApplication(data)
+      setReviewHistory(reviews)
+      setAuditLogs(audits)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load KYC details')
     } finally {
@@ -341,6 +349,63 @@ export function KYCDetail({ kycId, onBack, onReviewComplete }: KYCDetailProps) {
               )}
             </div>
           </div>
+
+          <div className="card mt-4">
+            <div className="card-header">
+              <h5 className="card-title mb-0">Review History</h5>
+            </div>
+            <div className="card-body">
+              {reviewHistory.length === 0 ? (
+                <p className="text-muted">No review history available.</p>
+              ) : (
+                <ul className="list-group list-group-flush">
+                  {reviewHistory.map((review) => (
+                    <li key={review.id} className="list-group-item">
+                      <div className="d-flex justify-content-between">
+                        <div>
+                          <strong>{review.action.toUpperCase()}</strong>
+                          <div className="small text-muted">by {review.reviewed_by}</div>
+                        </div>
+                        <span className="badge bg-secondary">{new Date(review.created_at).toLocaleString()}</span>
+                      </div>
+                      <div className="mt-2">
+                        <small>From {review.previous_status ?? 'N/A'} to {review.new_status}</small>
+                      </div>
+                      {review.notes && <p className="mt-2 mb-0">Notes: {review.notes}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <div className="card mt-4 mb-4">
+            <div className="card-header">
+              <h5 className="card-title mb-0">Audit Log</h5>
+            </div>
+            <div className="card-body">
+              {auditLogs.length === 0 ? (
+                <p className="text-muted">No audit events recorded yet.</p>
+              ) : (
+                <ul className="list-group list-group-flush">
+                  {auditLogs.map((log) => (
+                    <li key={log.id} className="list-group-item">
+                      <div className="d-flex justify-content-between">
+                        <div>
+                          <strong>{log.action}</strong>
+                          <div className="small text-muted">{log.entity_type} / {log.entity_id}</div>
+                        </div>
+                        <span className="badge bg-secondary">{new Date(log.created_at).toLocaleString()}</span>
+                      </div>
+                      {log.details && (
+                        <pre className="mt-2 mb-0 small text-break">{formatAuditDetails(log.details)}</pre>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
         </div>
       </div>
       {previewDocument && (
@@ -405,6 +470,22 @@ export function KYCDetail({ kycId, onBack, onReviewComplete }: KYCDetailProps) {
       )}
     </div>
   )
+}
+
+function formatAuditDetails(details: unknown): string {
+  if (typeof details === 'string') {
+    try {
+      return JSON.stringify(JSON.parse(details), null, 2)
+    } catch {
+      return details
+    }
+  }
+
+  if (typeof details === 'object' && details !== null) {
+    return JSON.stringify(details, null, 2)
+  }
+
+  return String(details)
 }
 
 function getStatusBadgeClass(status: string): string {

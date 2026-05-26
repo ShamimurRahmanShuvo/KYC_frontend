@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
+import { useCallback, useState, useRef, useEffect } from 'react'
+import type { RefObject } from 'react'
 import { getAuthHeaders } from '../services/auth'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -15,7 +16,11 @@ interface UploadResponse {
   message: string
 }
 
-export function CreateKYCPage() {
+interface CreateKYCPageProps {
+  onExistingApplication?: (applicationId: number) => void
+}
+
+export function CreateKYCPage({ onExistingApplication }: CreateKYCPageProps) {
   const [country, setCountry] = useState('')
   const [documentType, setDocumentType] = useState('')
   const [kycApplication, setKycApplication] = useState<KYCApplication | null>(null)
@@ -27,6 +32,9 @@ export function CreateKYCPage() {
   // File refs
   const frontIdRef = useRef<HTMLInputElement>(null)
   const backIdRef = useRef<HTMLInputElement>(null)
+  const videoFileRef = useRef<HTMLInputElement>(null)
+
+  const supportsMediaRecorder = typeof MediaRecorder !== 'undefined'
 
   // Upload states
   const [frontIdUploaded, setFrontIdUploaded] = useState(false)
@@ -44,31 +52,105 @@ export function CreateKYCPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
+  const previewAttachActiveRef = useRef(false)
+  const previewCleanupRef = useRef<(() => void) | null>(null)
 
-  useEffect(() => {
-    async function fetchExistingApplication() {
-      try {
-        const response = await fetch(`${API_BASE}/kyc/my-applications`, {
-          headers: getAuthHeaders(),
-        })
-        if (response.ok) {
-          const applications: KYCApplication[] = await response.json()
-          if (applications.length > 0) {
-            setKycApplication(applications[0]) // Assuming only one
+  function cleanupPreviewListeners() {
+    previewCleanupRef.current?.()
+    previewCleanupRef.current = null
+    previewAttachActiveRef.current = false
+  }
+
+  function attachPreviewToVideo(stream: MediaStream) {
+    if (previewAttachActiveRef.current) return
+    previewAttachActiveRef.current = true
+
+    const attach = () => {
+      const videoEl = videoElementRef.current
+      if (!videoEl) {
+        window.requestAnimationFrame(attach)
+        return
+      }
+
+      const video = videoEl
+      video.srcObject = stream
+      video.muted = true
+      video.playsInline = true
+
+      let readyFired = false
+
+      function cleanupReadyListeners() {
+        video.onloadedmetadata = null
+        video.onloadeddata = null
+        video.oncanplay = null
+      }
+
+      function onReady() {
+        if (readyFired) return
+        readyFired = true
+        cleanupReadyListeners()
+        video.play().catch(() => {})
+        setCameraReady(true)
+      }
+
+      video.onloadedmetadata = onReady
+      video.onloadeddata = onReady
+      video.oncanplay = onReady
+
+      previewCleanupRef.current = () => {
+        cleanupReadyListeners()
+        previewAttachActiveRef.current = false
+      }
+
+      if (video.readyState >= 2) {
+        onReady()
+      } else {
+        window.setTimeout(() => {
+          if (video.srcObject && !readyFired) {
+            onReady()
           }
-        }
-      } catch (err) {
-        console.error('Failed to fetch existing applications:', err)
-      } finally {
-        setIsLoading(false)
+        }, 1800)
       }
     }
-    fetchExistingApplication()
-  }, [])
+
+    attach()
+  }
+
+  const loadExistingApplication = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/kyc/my-applications`, {
+        headers: getAuthHeaders(),
+      })
+      if (response.ok) {
+        const applications: KYCApplication[] = await response.json()
+        if (applications.length > 0) {
+          const existing = applications[0]
+          setKycApplication(existing)
+          setSuccess('Existing KYC application found. Redirecting to document upload page...')
+          onExistingApplication?.(existing.id)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch existing applications:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [onExistingApplication])
+
+  useEffect(() => {
+    void Promise.resolve().then(loadExistingApplication)
+  }, [loadExistingApplication])
+
+  useEffect(() => {
+    if (cameraMode && streamRef.current) {
+      attachPreviewToVideo(streamRef.current)
+    }
+  }, [cameraMode])
 
   async function createKYCApplication() {
     setIsCreating(true)
     setError(null)
+    setSuccess(null)
 
     try {
       const response = await fetch(`${API_BASE}/kyc/create-kyc`, {
@@ -85,7 +167,12 @@ export function CreateKYCPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || `Failed to create KYC application: ${response.status}`)
+        const message = errorData.detail || `Failed to create KYC application: ${response.status}`
+        if (message.includes('already has a KYC application')) {
+          await loadExistingApplication()
+          throw new Error('You already have a KYC application. Document upload is available below.')
+        }
+        throw new Error(message)
       }
 
       const data = await response.json()
@@ -125,7 +212,7 @@ export function CreateKYCPage() {
     }
   }
 
-  async function handleFileUpload(ref: React.RefObject<HTMLInputElement | null>, endpoint: string, setUploaded: (value: boolean) => void) {
+  async function handleFileUpload(ref: RefObject<HTMLInputElement | null>, endpoint: string, setUploaded: (value: boolean) => void) {
     const file = ref.current?.files?.[0]
     if (!file) return
 
@@ -147,35 +234,30 @@ export function CreateKYCPage() {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: mode === 'video' })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: mode === 'video',
+      })
       streamRef.current = stream
       setCameraMode(mode)
       setCameraReady(false)
       setError(null)
       setSuccess(null)
-
-      if (videoElementRef.current) {
-        const videoEl = videoElementRef.current
-        videoEl.srcObject = stream
-        videoEl.onloadedmetadata = () => {
-          videoEl.play().catch(() => {})
-          setCameraReady(true)
-        }
-        if (videoEl.readyState >= 1) {
-          videoEl.play().catch(() => {})
-          setCameraReady(true)
-        }
-      }
+      cleanupPreviewListeners()
+      attachPreviewToVideo(stream)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not access camera.')
     }
   }
 
   function stopCamera() {
+    cleanupPreviewListeners()
     if (videoElementRef.current) {
       videoElementRef.current.pause()
       videoElementRef.current.srcObject = null
       videoElementRef.current.onloadedmetadata = null
+      videoElementRef.current.onloadeddata = null
+      videoElementRef.current.oncanplay = null
     }
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
@@ -228,6 +310,10 @@ export function CreateKYCPage() {
 
   function startVideoRecording() {
     if (!streamRef.current) return
+    if (!supportsMediaRecorder) {
+      setError('Browser does not support direct video recording. Please upload a video file.')
+      return
+    }
 
     const recorder = new MediaRecorder(streamRef.current)
     mediaRecorderRef.current = recorder
@@ -383,6 +469,10 @@ export function CreateKYCPage() {
               <strong>Application:</strong> {kycApplication.case_reference}
               <br />
               <strong>Status:</strong> {kycApplication.status}
+            </div>
+
+            <div className="alert alert-secondary mb-4">
+              You already have an active KYC application. Use the form below to upload or replace documents and continue your verification.
             </div>
 
             <h3 className="h4 mb-4">Update Documents</h3>
@@ -556,13 +646,37 @@ export function CreateKYCPage() {
                         )}
                       </>
                     ) : (
-                      <button
-                        onClick={() => startCamera('video')}
-                        disabled={isUploading || videoUploaded}
-                        className="btn btn-outline-primary btn-sm"
-                      >
-                        Use Camera for Video
-                      </button>
+                      <>
+                        <div className="mb-3">
+                          <button
+                            onClick={() => startCamera('video')}
+                            disabled={isUploading || videoUploaded}
+                            className="btn btn-outline-primary btn-sm"
+                          >
+                            Use Camera for Video
+                          </button>
+                        </div>
+                        {!supportsMediaRecorder && (
+                          <div className="alert alert-info py-2">
+                            Direct video recording is not supported in this browser. Upload a video file instead.
+                          </div>
+                        )}
+                        <input
+                          ref={videoFileRef}
+                          type="file"
+                          accept="video/*"
+                          capture="user"
+                          className="form-control mb-2"
+                          disabled={videoUploaded}
+                        />
+                        <button
+                          onClick={() => handleFileUpload(videoFileRef, 'upload-video', setVideoUploaded)}
+                          disabled={isUploading || videoUploaded}
+                          className="btn btn-outline-primary btn-sm"
+                        >
+                          {videoUploaded ? '✓ Uploaded' : 'Upload Video File'}
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
